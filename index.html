@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Online Compiler</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2230;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #f89820;
+    --accent-hover: #ffae3c;
+    --red: #f85149;
+    --green: #3fb950;
+    --blue: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    height: 52px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 16px;
+  }
+  .brand .logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), #d4691f);
+    display: grid;
+    place-items: center;
+    font-weight: 900;
+    color: #1a1a1a;
+    font-size: 14px;
+  }
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  button, select {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+  button:hover, select:hover {
+    border-color: var(--accent);
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .run-btn {
+    background: var(--accent);
+    color: #1a1a1a;
+    border-color: var(--accent);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .run-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+  .clear-btn:hover { border-color: var(--red); color: var(--red); }
+  main {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    height: calc(100vh - 52px);
+  }
+  .editor-pane, .io-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .editor-pane { border-right: 1px solid var(--border); }
+  .pane-header {
+    padding: 8px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 36px;
+  }
+  #editor { flex: 1; min-height: 0; }
+  .io-pane {
+    background: var(--panel);
+  }
+  .io-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .io-section.stdin { flex: 0 0 30%; border-bottom: 1px solid var(--border); }
+  .io-section.output { flex: 1; }
+  textarea, .output-area {
+    flex: 1;
+    background: var(--bg);
+    color: var(--text);
+    border: none;
+    padding: 12px 14px;
+    font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .output-area { user-select: text; }
+  .output-area .stderr { color: var(--red); }
+  .output-area .info { color: var(--blue); }
+  .output-area .success { color: var(--green); }
+  .output-area .muted { color: var(--muted); }
+  .status {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ready { background: var(--green); }
+  .dot.running { background: var(--accent); animation: pulse 1s infinite; }
+  .dot.error { background: var(--red); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(26, 26, 26, 0.3);
+    border-top-color: #1a1a1a;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 1.4fr 1fr; }
+    .editor-pane { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">&gt;_</div>
+    <span>Online Compiler</span>
+  </div>
+  <div class="controls">
+    <select id="language" title="Language"><option value="">Loading…</option></select>
+    <select id="version" title="Compiler version"></select>
+    <button class="clear-btn" id="clearBtn" title="Clear output">Clear</button>
+    <button class="run-btn" id="runBtn">
+      <span id="runIcon">▶</span>
+      <span id="runText">Run</span>
+    </button>
+  </div>
+</header>
+<main>
+  <section class="editor-pane">
+    <div class="pane-header">
+      <span id="filename">source</span>
+      <span class="status"><span class="dot ready" id="editorDot"></span><span id="editorStatus">Ready</span></span>
+    </div>
+    <div id="editor"></div>
+  </section>
+  <section class="io-pane">
+    <div class="io-section stdin">
+      <div class="pane-header">Standard Input (stdin)</div>
+      <textarea id="stdin" placeholder="Input passed to your program via System.in..."></textarea>
+    </div>
+    <div class="io-section output">
+      <div class="pane-header">
+        <span>Output</span>
+        <span class="status"><span class="dot" id="statusDot"></span><span id="statusText">Idle</span></span>
+      </div>
+      <pre class="output-area" id="output"><span class="muted">Output will appear here. Press Run (or Ctrl+Enter) to compile and execute.</span></pre>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script>
+  // Per-language: Monaco mode, default template, displayed filename.
+  // The Wandbox compiler list is fetched dynamically; this map only governs
+  // the editor experience for languages we want to "feel native".
+  const LANG_CONFIG = {
+    'Java':        { monaco: 'java',       filename: 'Main.java',
+      template: `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}\n` },
+    'C':           { monaco: 'c',          filename: 'main.c',
+      template: `#include <stdio.h>\n\nint main(void) {\n    printf("Hello, World!\\n");\n    return 0;\n}\n` },
+    'C++':         { monaco: 'cpp',        filename: 'main.cpp',
+      template: `#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}\n` },
+    'C#':          { monaco: 'csharp',     filename: 'main.cs',
+      template: `using System;\n\nclass Program {\n    static void Main() {\n        Console.WriteLine("Hello, World!");\n    }\n}\n` },
+    'Python':      { monaco: 'python',     filename: 'main.py',
+      template: `print("Hello, World!")\n` },
+    'Ruby':        { monaco: 'ruby',       filename: 'main.rb',
+      template: `puts "Hello, World!"\n` },
+    'JavaScript':  { monaco: 'javascript', filename: 'main.js',
+      template: `console.log("Hello, World!");\n` },
+    'TypeScript':  { monaco: 'typescript', filename: 'main.ts',
+      template: `console.log("Hello, World!");\n` },
+    'Go':          { monaco: 'go',         filename: 'main.go',
+      template: `package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello, World!")\n}\n` },
+    'Rust':        { monaco: 'rust',       filename: 'main.rs',
+      template: `fn main() {\n    println!("Hello, World!");\n}\n` },
+    'PHP':         { monaco: 'php',        filename: 'main.php',
+      template: `<?php\necho "Hello, World!\\n";\n` },
+    'Bash script': { monaco: 'shell',      filename: 'main.sh',
+      template: `#!/bin/bash\necho "Hello, World!"\n` },
+    'Lua':         { monaco: 'lua',        filename: 'main.lua',
+      template: `print("Hello, World!")\n` },
+    'Swift':       { monaco: 'swift',      filename: 'main.swift',
+      template: `print("Hello, World!")\n` },
+    'Haskell':     { monaco: 'plaintext',  filename: 'main.hs',
+      template: `main :: IO ()\nmain = putStrLn "Hello, World!"\n` },
+    'Scala':       { monaco: 'scala',      filename: 'Main.scala',
+      template: `object Main extends App {\n  println("Hello, World!")\n}\n` },
+    'Pascal':      { monaco: 'pascal',     filename: 'main.pas',
+      template: `program Hello;\nbegin\n  writeln('Hello, World!');\nend.\n` },
+    'Perl':        { monaco: 'perl',       filename: 'main.pl',
+      template: `print "Hello, World!\\n";\n` },
+    'R':           { monaco: 'r',          filename: 'main.R',
+      template: `cat("Hello, World!\\n")\n` },
+    'D':           { monaco: 'plaintext',  filename: 'main.d',
+      template: `import std.stdio;\n\nvoid main() {\n    writeln("Hello, World!");\n}\n` },
+    'F#':          { monaco: 'fsharp',     filename: 'main.fs',
+      template: `printfn "Hello, World!"\n` },
+    'Elixir':      { monaco: 'plaintext',  filename: 'main.exs',
+      template: `IO.puts("Hello, World!")\n` },
+    'Erlang':      { monaco: 'plaintext',  filename: 'main.erl',
+      template: `-module(main).\n-export([start/0]).\nstart() -> io:format("Hello, World!~n").\n` },
+    'Crystal':     { monaco: 'ruby',       filename: 'main.cr',
+      template: `puts "Hello, World!"\n` },
+    'OCaml':       { monaco: 'plaintext',  filename: 'main.ml',
+      template: `print_endline "Hello, World!"\n` },
+    'Lisp':        { monaco: 'plaintext',  filename: 'main.lisp',
+      template: `(princ "Hello, World!")\n(terpri)\n` },
+    'SQL':         { monaco: 'sql',        filename: 'main.sql',
+      template: `SELECT 'Hello, World!';\n` },
+    'CMake':       { monaco: 'cmake',      filename: 'CMakeLists.txt',
+      template: `message(STATUS "Hello, World!")\n` },
+    'Vim script':  { monaco: 'plaintext',  filename: 'main.vim',
+      template: `echo "Hello, World!"\n` },
+    'Nim':         { monaco: 'plaintext',  filename: 'main.nim',
+      template: `echo "Hello, World!"\n` },
+  };
+
+  let editor;
+  let compilersByLang = new Map();
+  let lastLoadedTemplate = null;
+  const runBtn = document.getElementById('runBtn');
+  const runIcon = document.getElementById('runIcon');
+  const runText = document.getElementById('runText');
+  const clearBtn = document.getElementById('clearBtn');
+  const outputEl = document.getElementById('output');
+  const stdinEl = document.getElementById('stdin');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const versionEl = document.getElementById('version');
+  const languageEl = document.getElementById('language');
+  const filenameEl = document.getElementById('filename');
+
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+  require(['vs/editor/editor.main'], function () {
+    monaco.editor.defineTheme('jcDark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#0d1117',
+        'editorGutter.background': '#0d1117',
+        'editorLineNumber.foreground': '#484f58',
+      },
+    });
+    const initial = LANG_CONFIG['Java'];
+    editor = monaco.editor.create(document.getElementById('editor'), {
+      value: initial.template,
+      language: initial.monaco,
+      theme: 'jcDark',
+      fontSize: 13,
+      fontFamily: '"Cascadia Code", "Fira Code", Consolas, monospace',
+      minimap: { enabled: false },
+      automaticLayout: true,
+      scrollBeyondLastLine: false,
+      tabSize: 4,
+      wordWrap: 'on',
+    });
+    lastLoadedTemplate = initial.template;
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runCode);
+    loadCompilerList();
+  });
+
+  async function loadCompilerList() {
+    setStatus('running', 'Loading compilers…');
+    try {
+      const res = await fetch('https://wandbox.org/api/list.json');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const all = await res.json();
+      compilersByLang = new Map();
+      for (const c of all) {
+        if (!c.language) continue;
+        if (!compilersByLang.has(c.language)) compilersByLang.set(c.language, []);
+        compilersByLang.get(c.language).push(c);
+      }
+      populateLanguageDropdown();
+      onLanguageChange();
+      setStatus('', 'Idle');
+    } catch (err) {
+      // Fallback: hardcode Java so the app still works offline-ish.
+      compilersByLang = new Map([['Java', [
+        { name: 'openjdk-jdk-22+36', 'display-name': 'OpenJDK', version: '22+36' },
+        { name: 'openjdk-jdk-21+35', 'display-name': 'OpenJDK', version: '21+35' },
+      ]]]);
+      populateLanguageDropdown();
+      onLanguageChange();
+      setStatus('error', 'Compiler list unavailable — Java only');
+    }
+  }
+
+  function populateLanguageDropdown() {
+    languageEl.innerHTML = '';
+    const langs = [...compilersByLang.keys()].sort((a, b) => a.localeCompare(b));
+    for (const lang of langs) {
+      const opt = document.createElement('option');
+      opt.value = lang;
+      opt.textContent = lang;
+      languageEl.appendChild(opt);
+    }
+    if (compilersByLang.has('Java')) languageEl.value = 'Java';
+  }
+
+  function onLanguageChange() {
+    const lang = languageEl.value;
+    const compilers = compilersByLang.get(lang) || [];
+    versionEl.innerHTML = '';
+    for (const c of compilers) {
+      const opt = document.createElement('option');
+      opt.value = c.name;
+      const dn = c['display-name'] || c.name;
+      opt.textContent = c.version ? `${dn} ${c.version}` : dn;
+      versionEl.appendChild(opt);
+    }
+    const cfg = LANG_CONFIG[lang];
+    const monacoLang = cfg ? cfg.monaco : 'plaintext';
+    if (editor) monaco.editor.setModelLanguage(editor.getModel(), monacoLang);
+    filenameEl.textContent = cfg ? cfg.filename : lang.toLowerCase().replace(/\s+/g, '_');
+    // Only swap in a template if the user hasn't started writing their own code.
+    if (cfg && editor) {
+      const current = editor.getValue();
+      if (current.trim() === '' || current === lastLoadedTemplate) {
+        editor.setValue(cfg.template);
+        lastLoadedTemplate = cfg.template;
+      }
+    }
+  }
+
+  languageEl.addEventListener('change', onLanguageChange);
+
+  function setStatus(state, text) {
+    statusDot.className = 'dot ' + state;
+    statusText.textContent = text;
+  }
+
+  function setRunning(isRunning) {
+    runBtn.disabled = isRunning;
+    if (isRunning) {
+      runIcon.outerHTML = '<span id="runIcon" class="spinner"></span>';
+      runText.textContent = 'Running';
+    } else {
+      const ico = document.getElementById('runIcon');
+      ico.outerHTML = '<span id="runIcon">▶</span>';
+      runText.textContent = 'Run';
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderOutput(parts) {
+    outputEl.innerHTML = parts.map(([cls, text]) => {
+      const safe = escapeHtml(text);
+      return cls ? `<span class="${cls}">${safe}</span>` : safe;
+    }).join('');
+  }
+
+  async function runCode() {
+    if (!editor) return;
+    const source = editor.getValue();
+    const compiler = versionEl.value;
+    const stdin = stdinEl.value;
+    const lang = languageEl.value;
+
+    if (!compiler) {
+      renderOutput([['stderr', 'No compiler selected. Wait for the compiler list to load, or pick a language.']]);
+      return;
+    }
+
+    setRunning(true);
+    setStatus('running', 'Compiling & running...');
+    renderOutput([['muted', 'Submitting to Wandbox...\n']]);
+
+    let payload = { code: source, compiler: compiler, stdin: stdin, save: false };
+
+    if (lang === 'Java') {
+      // Wandbox saves `code` as prog.java and executes `java prog`. A
+      // `public class Foo` declaration requires the source file be named
+      // Foo.java, so save the user's code under its real filename via `codes`
+      // and put a prog.java bridge that delegates to <ClassName>.main(args).
+      const publicMatch = source.match(/public\s+(?:final\s+|abstract\s+)*class\s+(\w+)/);
+      const publicClass = publicMatch ? publicMatch[1] : null;
+      if (publicClass && publicClass !== 'prog') {
+        const bridge =
+          'class prog {\n' +
+          '  public static void main(String[] args) throws Throwable {\n' +
+          '    ' + publicClass + '.main(args);\n' +
+          '  }\n' +
+          '}\n';
+        payload = {
+          code: bridge,
+          codes: [{ file: publicClass + '.java', code: source }],
+          compiler: compiler,
+          stdin: stdin,
+          save: false,
+        };
+      }
+    }
+
+    try {
+      const res = await fetch('https://wandbox.org/api/compile.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        renderOutput([['stderr', `HTTP ${res.status}: ${txt}`]]);
+        setStatus('error', 'Request failed');
+        return;
+      }
+
+      const data = await res.json();
+      const parts = [];
+      const exitCode = parseInt(data.status, 10);
+      const signal = data.signal;
+      const hasCompileError = data.compiler_error && data.compiler_error.trim().length > 0;
+      const hasProgramOutput = (data.program_output && data.program_output.length > 0)
+                            || (data.program_error && data.program_error.length > 0);
+
+      if (hasCompileError && !hasProgramOutput) {
+        parts.push(['info', '=== Compilation Errors ===\n']);
+        parts.push(['stderr', data.compiler_error]);
+        setStatus('error', `Compile failed (exit ${exitCode})`);
+      } else {
+        if (hasCompileError) {
+          parts.push(['info', '=== Compiler Output ===\n']);
+          parts.push(['stderr', data.compiler_error + '\n']);
+        }
+        if (data.program_output) parts.push([null, data.program_output]);
+        if (data.program_error) {
+          if (data.program_output) parts.push([null, '\n']);
+          parts.push(['stderr', data.program_error]);
+        }
+        const tail = `\n\n--- Process exited with code ${exitCode}${signal ? ' (signal: ' + signal + ')' : ''} ---`;
+        parts.push([exitCode === 0 ? 'success' : 'stderr', tail]);
+        setStatus(exitCode === 0 ? 'ready' : 'error',
+                  exitCode === 0 ? 'Done' : `Exited ${exitCode}`);
+      }
+
+      if (parts.length === 0) parts.push(['muted', '(no output)']);
+      renderOutput(parts);
+    } catch (err) {
+      renderOutput([['stderr', 'Network error: ' + err.message + '\n\nThe Wandbox API at wandbox.org may be temporarily unavailable, or your network is blocking the request.']]);
+      setStatus('error', 'Network error');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function clearOutput() {
+    renderOutput([['muted', 'Output cleared.']]);
+    setStatus('', 'Idle');
+  }
+
+  runBtn.addEventListener('click', runCode);
+  clearBtn.addEventListener('click', clearOutput);
+</script>
+</body>
+</html>
