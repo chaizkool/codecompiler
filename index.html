@@ -402,14 +402,11 @@
 
   function setRunning(isRunning) {
     runBtn.disabled = isRunning;
-    if (isRunning) {
-      runIcon.outerHTML = '<span id="runIcon" class="spinner"></span>';
-      runText.textContent = 'Running';
-    } else {
-      const ico = document.getElementById('runIcon');
-      ico.outerHTML = '<span id="runIcon">▶</span>';
-      runText.textContent = 'Run';
-    }
+    runText.textContent = isRunning ? 'Running' : 'Run';
+    const icon = document.getElementById('runIcon');
+    if (!icon) return;
+    icon.className = isRunning ? 'spinner' : '';
+    icon.textContent = isRunning ? '' : '▶';
   }
 
   function escapeHtml(s) {
